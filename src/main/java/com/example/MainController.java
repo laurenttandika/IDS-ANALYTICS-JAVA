@@ -5,6 +5,7 @@ import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.collections.transformation.FilteredList;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.stage.DirectoryChooser;
@@ -40,6 +41,8 @@ public class MainController {
     private ListView<String> failedImportsListView;
     @FXML
     private Button exportButton;
+    @FXML
+    private TextField mdbSearchField;
 
     private ObservableList<ObservableList<String>> currentResults = FXCollections.observableArrayList();
     private List<String> currentColumnHeaders = new ArrayList<>();
@@ -50,9 +53,25 @@ public class MainController {
     private int totalMdbs = 0;
     private final AtomicInteger completedMdbs = new AtomicInteger(0);
 
+    private ObservableList<String> allMdbSources;
+    private FilteredList<String> filteredMdbList;
+
     public void initialize() {
         mdbListView.setContextMenu(createMdbListContextMenu());
         failedImportsListView.setItems(failedImports);
+
+        // Set up filter for mdbListView
+        allMdbSources = FXCollections.observableArrayList();
+        filteredMdbList = new FilteredList<>(allMdbSources, s -> true);
+        mdbListView.setItems(filteredMdbList);
+
+        mdbSearchField.textProperty().addListener((obs, oldVal, newVal) -> {
+            filteredMdbList.setPredicate(item -> {
+                if (newVal == null || newVal.isBlank())
+                    return true;
+                return item.toLowerCase().contains(newVal.toLowerCase());
+            });
+        });
 
         try {
             File dbFile = new File("converted.db");
@@ -387,7 +406,11 @@ public class MainController {
                     sources.add(hfr + " [ " + src + " ] ");
                 }
             }
-            mdbListView.setItems(sources);
+
+            Platform.runLater(() -> {
+                allMdbSources.setAll(sources); // ✅ safe update
+            });
+
         } catch (SQLException e) {
             e.printStackTrace();
             showAlert("Error", "Failed to load imported MDB sources: " + e.getMessage());

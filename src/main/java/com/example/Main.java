@@ -1,6 +1,5 @@
 package com.example;
 
-
 import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
@@ -11,7 +10,11 @@ public class Main extends Application {
     public void start(Stage stage) throws Exception {
         FXMLLoader loader = new FXMLLoader(getClass().getResource("/layout.fxml"));
         Scene scene = new Scene(loader.load());
-        scene.getStylesheets().add(getClass().getResource("/style.css").toExternalForm());
+        // scene.getStylesheets().add(getClass().getResource("/style.css").toExternalForm());
+        // scene.getStylesheets().add(getClass().getResource("/dark-theme.css").toExternalForm());
+        MainController controller = loader.getController();
+        controller.setScene(scene);
+
         stage.setTitle("MDB to SQLite Viewer");
         stage.setScene(scene);
         stage.setWidth(1000);

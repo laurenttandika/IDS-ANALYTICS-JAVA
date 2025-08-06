@@ -19,3 +19,9 @@
 .label {
     -fx-text-fill: #333;
 }
+
+#importedCountLabel {
+    -fx-text-fill: #4CAF50; /* green */
+    -fx-font-weight: bold;
+    -fx-font-size: 14px;
+}

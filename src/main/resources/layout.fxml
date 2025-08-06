@@ -55,6 +55,16 @@ xmlns="http://javafx.com/javafx"
             <Button text="🧪 Run Query" onAction="#onRunQueryClicked" />
             <Button fx:id="exportButton" text="💾 Export to CSV" onAction="#onExportClicked"
                 visible="false" />
+
+            <!-- Spacer to push the toggle button to the far right -->
+            <Pane HBox.hgrow="ALWAYS" />
+
+            <!-- Theme toggle button -->
+            <ToggleButton fx:id="themeToggle" id="themeToggle" text="Light Mode">
+                <tooltip>
+                    <Tooltip text="Toggle Dark/Light Mode" />
+                </tooltip>
+            </ToggleButton>
         </ToolBar>
     </top>
 
@@ -63,7 +73,12 @@ xmlns="http://javafx.com/javafx"
             <VBox spacing="10.0" prefWidth="250">
                 <Label text="📊 Tables" style="-fx-font-weight: bold;" />
                 <TreeView fx:id="tableTreeView" VBox.vgrow="ALWAYS" />
-                <Label text="📦 Imported MDBs" style="-fx-font-weight: bold;" />
+
+                <HBox spacing="10">
+                    <Label text="📦 Imported MDBs" style="-fx-font-weight: bold;" />
+                    <Label fx:id="importedCountLabel" id="importedCountLabel" />
+                </HBox>
+
                 <TextField fx:id="mdbSearchField" promptText="Search imported MDBs..." />
                 <ListView fx:id="mdbListView" VBox.vgrow="ALWAYS" />
                 <Label text="❌ Failed Imports" style="-fx-font-weight: bold;" />
@@ -72,7 +87,7 @@ xmlns="http://javafx.com/javafx"
 
             <VBox spacing="10">
                 <Label text="📝 SQL Query:" style="-fx-font-weight: bold;" />
-                <TextArea fx:id="queryArea" prefRowCount="4" VBox.vgrow="NEVER" />
+                <TextArea fx:id="queryArea" prefRowCount="8" VBox.vgrow="NEVER" />
                 <TableView fx:id="resultTable" VBox.vgrow="ALWAYS" />
             </VBox>
         </SplitPane>

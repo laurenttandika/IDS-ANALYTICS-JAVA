@@ -1,0 +1,51 @@
+.root {
+    -fx-base: #2b2b2b;
+    -fx-background-color: #2b2b2b;
+    -fx-text-fill: #f0f0f0;
+}
+
+.label {
+    -fx-text-fill: #dddddd;
+}
+
+.text-area,
+.text-field {
+    -fx-background-color: #3c3f41;
+    -fx-text-fill: white;
+    -fx-border-color: #5e5e5e;
+}
+
+.button {
+    -fx-background-color: #555;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+}
+
+.progress-bar {
+    -fx-accent: #00bc8c;
+}
+
+.list-view,
+.table-view {
+    -fx-control-inner-background: #333333;
+    -fx-text-background-color: #f0f0f0;
+    -fx-table-cell-border-color: transparent;
+    -fx-selection-bar: #444;
+    -fx-selection-bar-text: white;
+}
+
+.tree-view {
+    -fx-background-color: #2b2b2b;
+    -fx-cell-hover-color: #444;
+}
+
+#themeToggle {
+    -fx-background-radius: 10;
+    -fx-font-size: 12px;
+}
+
+#importedCountLabel {
+    -fx-text-fill: #4CAF50; /* green */
+    -fx-font-weight: bold;
+    -fx-font-size: 14px;
+}

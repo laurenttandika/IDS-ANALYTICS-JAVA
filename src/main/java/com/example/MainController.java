@@ -2,11 +2,13 @@ package com.example;
 
 import com.healthmarketscience.jackcess.*;
 import javafx.application.Platform;
+import javafx.beans.binding.Bindings;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.fxml.FXML;
+import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
@@ -43,6 +45,14 @@ public class MainController {
     private Button exportButton;
     @FXML
     private TextField mdbSearchField;
+    @FXML
+    private Label importedCountLabel;
+    @FXML
+    private ToggleButton themeToggle;
+
+    private Scene scene;
+    private final String DARK_THEME = getClass().getResource("/dark-theme.css").toExternalForm();
+    private final String LIGHT_THEME = getClass().getResource("/light-theme.css").toExternalForm();
 
     private ObservableList<ObservableList<String>> currentResults = FXCollections.observableArrayList();
     private List<String> currentColumnHeaders = new ArrayList<>();
@@ -55,6 +65,14 @@ public class MainController {
 
     private ObservableList<String> allMdbSources;
     private FilteredList<String> filteredMdbList;
+
+    // for dark mode/light
+    public void setScene(Scene scene) {
+        this.scene = scene;
+        if (!scene.getStylesheets().contains(DARK_THEME)) {
+            scene.getStylesheets().add(DARK_THEME); // default
+        }
+    }
 
     public void initialize() {
         mdbListView.setContextMenu(createMdbListContextMenu());
@@ -71,6 +89,26 @@ public class MainController {
                     return true;
                 return item.toLowerCase().contains(newVal.toLowerCase());
             });
+        });
+
+        importedCountLabel.textProperty().bind(Bindings.size(allMdbSources).asString("( %d )"));
+
+        // Dark mode toggle behavior
+        themeToggle.setSelected(true);
+        themeToggle.setOnAction(e -> {
+            if (themeToggle.isSelected()) {
+                themeToggle.setText("Light Mode");
+                scene.getStylesheets().remove(LIGHT_THEME);
+                if (!scene.getStylesheets().contains(DARK_THEME)) {
+                    scene.getStylesheets().add(DARK_THEME);
+                }
+            } else {
+                themeToggle.setText("Dark Mode");
+                scene.getStylesheets().remove(DARK_THEME);
+                if (!scene.getStylesheets().contains(LIGHT_THEME)) {
+                    scene.getStylesheets().add(LIGHT_THEME);
+                }
+            }
         });
 
         try {

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.example.MainController">
+
+    <top>
+        <VBox spacing="5">
+            <ToolBar>
+                <Button text="Fresh Import" onAction="#onFreshImportClicked" />
+                <Button text="Merge Existing" onAction="#onMergeImportClicked" />
+                <Button text="Run Query" onAction="#onRunQueryClicked" />
+            </ToolBar>
+            <HBox spacing="10" alignment="CENTER_LEFT">
+                <ProgressBar fx:id="importProgress" prefWidth="300" />
+                <Label fx:id="statusLabel" text="Status: Ready" />
+            </HBox>
+        </VBox>
+    </top>
+
+    <left>
+        <VBox spacing="5">
+            <Label text="Imported MDBs" />
+            <ListView fx:id="mdbListView" prefHeight="150" />
+            <Label text="Tables" />
+            <TreeView fx:id="tableTreeView" prefHeight="400" />
+            <Label text="Failed Imports" />
+            <ListView fx:id="failedImportsListView" prefHeight="120" />
+        </VBox>
+    </left>
+
+    <center>
+        <SplitPane orientation="VERTICAL">
+            <TextArea fx:id="queryArea" prefHeight="200" />
+            <TableView fx:id="resultTable" />
+        </SplitPane>
+    </center>
+
+</BorderPane>

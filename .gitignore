@@ -1,0 +1,50 @@
+# Compiled Java class files
+*.class
+
+# Log files
+*.log
+
+# IntelliJ IDEA files
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+
+# Build directories
+/build/
+/out/
+/target/
+
+# Maven
+/logs/
+dependency-reduced-pom.xml
+
+# Gradle
+.gradle/
+build/
+
+# JavaFX or local config
+*.db
+*.sqlite
+*.DS_Store
+
+# OS-specific
+Thumbs.db
+.DS_Store
+
+# Backup files
+*.bak
+*.swp
+*~
+
+# Logs and temporary files
+*.tmp
+*.log
+
+# JetBrains
+*.iws
+*.ipr
+
+# Ignore JARs (if built locally)
+*.jar

@@ -1,40 +1,83 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
 
-<BorderPane xmlns:fx="http://javafx.com/fxml"
-            fx:controller="com.example.MainController">
+<!--<BorderPane
+xmlns="http://javafx.com/javafx"
+    xmlns:fx="http://javafx.com/fxml"
+    fx:controller="com.example.MainController">
 
     <top>
-        <VBox spacing="5">
-            <ToolBar>
-                <Button text="Fresh Import" onAction="#onFreshImportClicked" />
-                <Button text="Merge Existing" onAction="#onMergeImportClicked" />
-                <Button text="Run Query" onAction="#onRunQueryClicked" />
-            </ToolBar>
-            <HBox spacing="10" alignment="CENTER_LEFT">
-                <ProgressBar fx:id="importProgress" prefWidth="300" />
-                <Label fx:id="statusLabel" text="Status: Ready" />
-            </HBox>
-        </VBox>
+        <HBox spacing="10">
+            <Button text="Fresh Import" onAction="#onFreshImportClicked" />
+            <Button text="Merge to Existing" onAction="#onMergeImportClicked" />
+            <ProgressBar fx:id="importProgress" prefWidth="300" />
+            <Label fx:id="statusLabel" text="Ready" />
+        </HBox>
     </top>
 
     <left>
-        <VBox spacing="5">
+        <VBox spacing="10">
+            <Label text="Tables" />
+            <TreeView fx:id="tableTreeView" prefHeight="300" />
+
             <Label text="Imported MDBs" />
             <ListView fx:id="mdbListView" prefHeight="150" />
-            <Label text="Tables" />
-            <TreeView fx:id="tableTreeView" prefHeight="400" />
+
             <Label text="Failed Imports" />
-            <ListView fx:id="failedImportsListView" prefHeight="120" />
+            <ListView fx:id="failedImportsListView" prefHeight="100" />
         </VBox>
     </left>
 
     <center>
-        <SplitPane orientation="VERTICAL">
-            <TextArea fx:id="queryArea" prefHeight="200" />
-            <TableView fx:id="resultTable" />
-        </SplitPane>
+        <VBox spacing="10">
+            <Label text="SQL Query" />
+            <TextArea fx:id="queryArea" prefHeight="100" />
+            <Button text="Run Query" onAction="#onRunQueryClicked" />
+            <TableView fx:id="resultTable" prefHeight="400" />
+        </VBox>
+    </center>
+</BorderPane>-->
+
+<BorderPane xmlns="http://javafx.com/javafx"
+    xmlns:fx="http://javafx.com/fxml"
+    fx:controller="com.example.MainController">
+
+    <!-- Top Status Bar -->
+    <top>
+        <HBox spacing="10">
+            <Button text="Fresh Import" onAction="#onFreshImportClicked" />
+            <Button text="Merge to Existing" onAction="#onMergeImportClicked" />
+            <ProgressBar fx:id="importProgress" prefWidth="300" />
+            <Label fx:id="statusLabel" text="Status..." />
+        </HBox>
+    </top>
+
+    <!-- Left Sidebar: Tree View + MDB Sources -->
+    <left>
+        <VBox spacing="10">
+            <Label text="Tables" />
+            <TreeView fx:id="tableTreeView" VBox.vgrow="ALWAYS" />
+            <Label text="Imported MDBs" />
+            <ListView fx:id="mdbListView" VBox.vgrow="ALWAYS" />
+            <Label text="Failed Imports" />
+            <ListView fx:id="failedImportsListView" VBox.vgrow="ALWAYS" />
+        </VBox>
+    </left>
+
+    <!-- Center: Query + Results -->
+    <center>
+        <VBox spacing="10">
+            <Label text="SQL Query" />
+            <TextArea fx:id="queryArea" prefRowCount="12" VBox.vgrow="NEVER" />
+            <HBox spacing="10">
+                <Button text="Run Query" onAction="#onRunQueryClicked" />
+                <Button fx:id="exportButton" text="Export to CSV" onAction="#onExportClicked"
+                    visible="false" />
+            </HBox>
+            <TableView fx:id="resultTable" VBox.vgrow="ALWAYS" />
+        </VBox>
     </center>
 
 </BorderPane>

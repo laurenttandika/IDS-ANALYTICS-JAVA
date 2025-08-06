@@ -1,23 +1,26 @@
 package com.example;
 
-import com.healthmarketscience.jackcess.Database;
-import com.healthmarketscience.jackcess.DatabaseBuilder;
-import com.healthmarketscience.jackcess.Row;
-import com.healthmarketscience.jackcess.Table;
+import com.healthmarketscience.jackcess.*;
 import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
+import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
-import javafx.stage.Stage;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.*;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 public class MainController {
@@ -35,24 +38,216 @@ public class MainController {
     private ListView<String> mdbListView;
     @FXML
     private ListView<String> failedImportsListView;
+    @FXML
+    private Button exportButton;
+
+    private ObservableList<ObservableList<String>> currentResults = FXCollections.observableArrayList();
+    private List<String> currentColumnHeaders = new ArrayList<>();
 
     private Connection sqliteConnection;
     private boolean freshImport = true;
     private ObservableList<String> failedImports = FXCollections.observableArrayList();
+    private int totalMdbs = 0;
+    private final AtomicInteger completedMdbs = new AtomicInteger(0);
 
     public void initialize() {
         mdbListView.setContextMenu(createMdbListContextMenu());
         failedImportsListView.setItems(failedImports);
+
+        try {
+            File dbFile = new File("converted.db");
+            if (dbFile.exists()) {
+                sqliteConnection = DriverManager.getConnection("jdbc:sqlite:converted.db");
+                loadTablesIntoTreeView(sqliteConnection);
+                loadMdbSourcesList(sqliteConnection);
+                statusLabel.setText("✅ Loaded existing converted.db");
+            } else {
+                statusLabel.setText("ℹ️ No existing database found. Please import MDBs.");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            showAlert("Error", "Failed to load existing database: " + e.getMessage());
+        }
+    }
+
+    public void onFreshImportClicked() {
+        freshImport = true;
+        openFileOrFolderForImport();
+    }
+
+    public void onMergeImportClicked() {
+        freshImport = false;
+        openFileOrFolderForImport();
+    }
+
+    private void openFileOrFolderForImport() {
+        Alert optionDialog = new Alert(Alert.AlertType.CONFIRMATION);
+        optionDialog.initOwner(mdbListView.getScene().getWindow()); // 👈 anchor to main window
+        optionDialog.setTitle("Select Input Type");
+        optionDialog.setHeaderText("Choose import source:");
+        ButtonType fileButton = new ButtonType("Select Files");
+        ButtonType folderButton = new ButtonType("Select Folder");
+        optionDialog.getButtonTypes().setAll(fileButton, folderButton, ButtonType.CANCEL);
+
+        Optional<ButtonType> result = optionDialog.showAndWait();
+        if (result.isEmpty() || result.get() == ButtonType.CANCEL)
+            return;
+
+        List<File> allMdbs = new ArrayList<>();
+
+        if (result.get() == fileButton) {
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle("Select MDB Files");
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("MDB files", "*.mdb"));
+            List<File> files = chooser.showOpenMultipleDialog(null);
+            if (files != null)
+                allMdbs.addAll(files);
+        } else {
+            DirectoryChooser chooser = new DirectoryChooser();
+            chooser.setTitle("Select Folder");
+            File dir = chooser.showDialog(null);
+            if (dir != null) {
+                try {
+                    Files.walk(dir.toPath())
+                            .filter(path -> path.toString().toLowerCase().endsWith(".mdb"))
+                            .map(Path::toFile)
+                            .forEach(allMdbs::add);
+                } catch (IOException e) {
+                    showAlert("Error", "Failed to scan folder: " + e.getMessage());
+                    return;
+                }
+            }
+        }
+
+        if (allMdbs.isEmpty())
+            return;
+
+        try {
+            if (freshImport) {
+                Files.deleteIfExists(Paths.get("converted.db"));
+                sqliteConnection = DriverManager.getConnection("jdbc:sqlite:converted.db");
+            } else {
+                if (sqliteConnection == null || sqliteConnection.isClosed()) {
+                    sqliteConnection = DriverManager.getConnection("jdbc:sqlite:converted.db");
+                }
+            }
+
+            Platform.runLater(() -> {
+                importProgress.setProgress(0);
+                statusLabel.setText("Starting threaded import...");
+            });
+
+            startAutoMerge(allMdbs);
+
+        } catch (Exception e) {
+            showAlert("Error", "Failed to open database connection: " + e.getMessage());
+        }
+    }
+
+    public void triggerImport(boolean isFresh) {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Select MDB Files");
+        List<File> selectedFiles = chooser.showOpenMultipleDialog(null);
+        if (selectedFiles == null || selectedFiles.isEmpty())
+            return;
+
+        if (isFresh) {
+            resetConvertedDatabase();
+        }
+
+        startAutoMerge(selectedFiles);
+    }
+
+    private void resetConvertedDatabase() {
+        try {
+            if (sqliteConnection != null)
+                sqliteConnection.close();
+            File dbFile = new File("converted.db");
+            if (dbFile.exists())
+                dbFile.delete();
+            sqliteConnection = DriverManager.getConnection("jdbc:sqlite:converted.db");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void startAutoMerge(List<File> mdbFiles) {
+        this.totalMdbs = mdbFiles.size();
+        completedMdbs.set(0);
+
+        int threads = Math.min(mdbFiles.size(), Runtime.getRuntime().availableProcessors());
+        ExecutorService executor = Executors.newFixedThreadPool(threads);
+
+        for (File mdbFile : mdbFiles) {
+            executor.submit(() -> importIfNotExists(mdbFile));
+        }
+
+        executor.shutdown();
+
+        new Thread(() -> {
+            while (!executor.isTerminated()) {
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException ignored) {
+                }
+            }
+            Platform.runLater(() -> {
+                loadTablesIntoTreeView(sqliteConnection);
+                loadMdbSourcesList(sqliteConnection);
+                statusLabel.setText("✅ All MDB files imported.");
+            });
+        }).start();
+    }
+
+    private void importIfNotExists(File mdbFile) {
+        try (Database mdb = DatabaseBuilder.open(mdbFile)) {
+            Table configTable = mdb.getTable("tblConfig");
+            Map<String, Integer> hfrCount = new HashMap<>();
+            for (Row row : configTable) {
+                String hfr = row.get("HFRCode") != null ? row.get("HFRCode").toString() : null;
+                if (hfr != null)
+                    hfrCount.put(hfr, hfrCount.getOrDefault(hfr, 0) + 1);
+            }
+            String hfrCode = hfrCount.entrySet().stream()
+                    .max(Map.Entry.comparingByValue())
+                    .map(Map.Entry::getKey)
+                    .orElse("UNKNOWN");
+
+            synchronized (sqliteConnection) {
+                if (isAlreadyImported(hfrCode)) {
+                    String msg = hfrCode + " [ " + mdbFile.getName() + " ] already imported";
+                    Platform.runLater(() -> failedImports.add(msg));
+                    return;
+                }
+
+                try (Statement pragma = sqliteConnection.createStatement()) {
+                    pragma.execute("PRAGMA synchronous = OFF");
+                    pragma.execute("PRAGMA journal_mode = MEMORY");
+                }
+
+                MdbRecordManager.mergeMdbToSqlite(sqliteConnection, mdb, hfrCode, mdbFile.getName());
+                Platform.runLater(() -> mdbListView.getItems().add(hfrCode + " [ " + mdbFile.getName() + " ]"));
+            }
+
+            int done = completedMdbs.incrementAndGet();
+            double progress = (double) done / totalMdbs;
+
+            Platform.runLater(() -> {
+                importProgress.setProgress(progress);
+                statusLabel.setText("Imported " + done + " / " + totalMdbs + " MDBs");
+            });
+        } catch (Exception e) {
+            String msg = "Failed: [ " + mdbFile.getName() + " ] - " + e.getMessage();
+            Platform.runLater(() -> failedImports.add(msg));
+        }
     }
 
     private boolean isAlreadyImported(String hfrCode) {
         try {
-            // check if SecurityUsers table exists
             DatabaseMetaData meta = sqliteConnection.getMetaData();
             ResultSet tables = meta.getTables(null, null, "SecurityUsers", null);
-            if (!tables.next()) {
-                return false; // Allow first-time import
-            }
+            if (!tables.next())
+                return false;
 
             PreparedStatement stmt = sqliteConnection.prepareStatement(
                     "SELECT 1 FROM SecurityUsers WHERE hfr_code = ? LIMIT 1");
@@ -60,7 +255,7 @@ public class MainController {
             ResultSet rs = stmt.executeQuery();
             return rs.next();
         } catch (SQLException e) {
-            return true; // fail safe
+            return false;
         }
     }
 
@@ -81,7 +276,7 @@ public class MainController {
 
                     if (result.isPresent() && result.get() == ButtonType.OK) {
                         // Extract hfr_code from 'hfr_code [ source_mdb ]'
-                        String hfrCode = selected.split(" [ ")[0];
+                        String hfrCode = selected.split("\\s*\\[")[0].trim();
                         MdbRecordManager.removeRecordsBySource(sqliteConnection, hfrCode);
                         loadMdbSourcesList(sqliteConnection);
                         statusLabel.setText("✅ Records from '" + selected + "' removed.");
@@ -96,149 +291,6 @@ public class MainController {
         });
         contextMenu.getItems().add(removeItem);
         return contextMenu;
-    }
-
-    public void onFreshImportClicked() {
-        freshImport = true;
-        openMdbFiles();
-    }
-
-    public void onMergeImportClicked() {
-        freshImport = false;
-        openMdbFiles();
-    }
-
-    private void openMdbFiles() {
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Open MDB File(s)");
-        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Access DB", "*.mdb"));
-        List<File> selectedFiles = fileChooser.showOpenMultipleDialog(new Stage());
-
-        if (selectedFiles != null && !selectedFiles.isEmpty()) {
-            importMdbFiles(selectedFiles);
-        }
-    }
-
-    private void importMdbFiles(List<File> selectedFiles) {
-        new Thread(() -> {
-            try {
-                Platform.runLater(() -> {
-                    importProgress.setProgress(0);
-                    statusLabel.setText("Starting import...");
-                });
-
-                if (freshImport) {
-                    Files.deleteIfExists(Paths.get("converted.db"));
-                    sqliteConnection = DriverManager.getConnection("jdbc:sqlite:converted.db");
-                } else {
-                    if (sqliteConnection == null || sqliteConnection.isClosed()) {
-                        sqliteConnection = DriverManager.getConnection("jdbc:sqlite:converted.db");
-                    }
-                }
-
-                int totalTableCount = 0;
-                Map<File, List<String>> fileTableMap = new HashMap<>();
-
-                for (File selectedFile : selectedFiles) {
-                    Database mdb = DatabaseBuilder.open(selectedFile);
-                    List<String> tableNames = new ArrayList<>(mdb.getTableNames());
-                    totalTableCount += tableNames.size();
-                    fileTableMap.put(selectedFile, tableNames);
-                    mdb.close();
-                }
-
-                int importedTableCounter = 0;
-
-                for (File selectedFile : selectedFiles) {
-                    String sourceFile = selectedFile.getName();
-                    Platform.runLater(() -> statusLabel.setText("Importing: " + sourceFile));
-
-                    Database mdb = DatabaseBuilder.open(selectedFile);
-                    List<String> tableNames = fileTableMap.get(selectedFile);
-
-                    String hfrCode = "UNKNOWN";
-                    try {
-                        Table configTable = mdb.getTable("tblConfig");
-                        Map<String, Integer> hfrCount = new HashMap<>();
-
-                        for (Row row : configTable) {
-                            String hfr = row.get("HFRCode") != null ? row.get("HFRCode").toString() : null;
-                            if (hfr != null) {
-                                hfrCount.put(hfr, hfrCount.getOrDefault(hfr, 0) + 1);
-                            }
-                        }
-
-                        hfrCode = hfrCount.entrySet().stream()
-                                .max(Comparator.comparingInt(Map.Entry::getValue))
-                                .map(Map.Entry::getKey)
-                                .orElse("UNKNOWN");
-
-                        System.out.println("📌 HFRCode for " + sourceFile + ": " + hfrCode);
-                    } catch (Exception e) {
-                        System.err.println("⚠️ Could not read HFRCode from " + sourceFile);
-                    }
-
-                    // Before importing each file, after determining hfrCode:
-                    if (isAlreadyImported(hfrCode)) {
-                        String failedEntry = hfrCode + " [ " + sourceFile + " ] - Existing HFR_Code, kindly remove first!";
-                        Platform.runLater(() -> failedImports.add(failedEntry));
-                        continue;
-                    }
-
-                    for (String tableName : tableNames) {
-                        Table mdbTable = mdb.getTable(tableName);
-                        List<String> columnNames = new ArrayList<>();
-                        mdbTable.getColumns().forEach(col -> columnNames.add(col.getName()));
-                        columnNames.add("hfr_code");
-                        columnNames.add("source_mdb");
-
-                        if (freshImport) {
-                            StringBuilder createSql = new StringBuilder("CREATE TABLE IF NOT EXISTS \"")
-                                    .append(tableName).append("\" (");
-                            for (String col : columnNames) {
-                                createSql.append("\"").append(col).append("\" TEXT, ");
-                            }
-                            createSql.delete(createSql.length() - 2, createSql.length());
-                            createSql.append(")");
-                            sqliteConnection.createStatement().execute(createSql.toString());
-                        }
-
-                        String placeholders = columnNames.stream().map(c -> "?").collect(Collectors.joining(", "));
-                        String insertSql = "INSERT INTO \"" + tableName + "\" (" +
-                                columnNames.stream().map(c -> "\"" + c + "\"").collect(Collectors.joining(", ")) +
-                                ") VALUES (" + placeholders + ")";
-                        PreparedStatement insertStmt = sqliteConnection.prepareStatement(insertSql);
-
-                        for (Row row : mdbTable) {
-                            for (int i = 0; i < columnNames.size() - 2; i++) {
-                                Object val = row.get(columnNames.get(i));
-                                insertStmt.setString(i + 1, val != null ? val.toString() : null);
-                            }
-                            insertStmt.setString(columnNames.size() - 1, hfrCode);
-                            insertStmt.setString(columnNames.size(), sourceFile);
-                            insertStmt.executeUpdate();
-                        }
-
-                        importedTableCounter++;
-                        double progress = (double) importedTableCounter / totalTableCount;
-                        Platform.runLater(() -> {
-                            importProgress.setProgress(progress);
-                            statusLabel.setText("Imported table: " + tableName);
-                        });
-                    }
-                }
-
-                Platform.runLater(() -> {
-                    loadTablesIntoTreeView(sqliteConnection);
-                    loadMdbSourcesList(sqliteConnection);
-                    statusLabel.setText("✅ All MDB files imported.");
-                });
-
-            } catch (Exception e) {
-                e.printStackTrace();
-                Platform.runLater(() -> showAlert("Error", "Failed to import MDBs: " + e.getMessage()));
-            }
-        }).start();
     }
 
     public void onRunQueryClicked() {
@@ -261,26 +313,32 @@ public class MainController {
                 ResultSet rs = stmt.executeQuery(query)) {
 
             resultTable.getColumns().clear();
+            currentResults.clear();
+            currentColumnHeaders.clear();
+
             ResultSetMetaData meta = rs.getMetaData();
             int columnCount = meta.getColumnCount();
 
             for (int i = 1; i <= columnCount; i++) {
                 final int colIndex = i;
-                TableColumn<ObservableList<String>, String> col = new TableColumn<>(meta.getColumnName(i));
+                String columnLabel = meta.getColumnLabel(i);
+                currentColumnHeaders.add(columnLabel);
+
+                TableColumn<ObservableList<String>, String> col = new TableColumn<>(columnLabel);
                 col.setCellValueFactory(param -> new ReadOnlyStringWrapper(param.getValue().get(colIndex - 1)));
                 resultTable.getColumns().add(col);
             }
 
-            ObservableList<ObservableList<String>> data = FXCollections.observableArrayList();
             while (rs.next()) {
                 ObservableList<String> row = FXCollections.observableArrayList();
                 for (int i = 1; i <= columnCount; i++) {
                     row.add(rs.getString(i));
                 }
-                data.add(row);
+                currentResults.add(row);
             }
 
-            resultTable.setItems(data);
+            resultTable.setItems(currentResults);
+            exportButton.setVisible(!currentResults.isEmpty());
 
         } catch (SQLException e) {
             e.printStackTrace();
@@ -342,8 +400,37 @@ public class MainController {
         executeQueryAndDisplay(query);
     }
 
+    public void onExportClicked() {
+        if (currentResults.isEmpty()) {
+            showAlert("No Data", "There are no query results to export.");
+            return;
+        }
+
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Save CSV File");
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("CSV files (*.csv)", "*.csv"));
+        File file = chooser.showSaveDialog(null);
+
+        if (file != null) {
+            try (PrintWriter writer = new PrintWriter(file)) {
+                writer.println(String.join(",", currentColumnHeaders));
+                for (ObservableList<String> row : currentResults) {
+                    writer.println(row.stream()
+                            .map(val -> val != null ? "\"" + val.replace("\"", "\"\"") + "\"" : "")
+                            .collect(Collectors.joining(",")));
+                }
+
+                showAlert("Success", "Query results exported successfully.");
+            } catch (Exception e) {
+                e.printStackTrace();
+                showAlert("Error", "Failed to export CSV: " + e.getMessage());
+            }
+        }
+    }
+
     private void showAlert(String title, String message) {
         Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.initOwner(mdbListView.getScene().getWindow()); // 👈 anchor to main window
         alert.setTitle(title);
         alert.setContentText(message);
         alert.showAndWait();

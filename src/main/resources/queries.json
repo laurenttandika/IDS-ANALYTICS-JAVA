@@ -1,3 +1,0 @@
-{
-    "tx_new": "SELECT p.PatientID,p.sex,p.DateOfBirth,(strftime('%Y', 'now') - strftime('%Y', p.DateOfBirth) - (strftime('%m-%d', 'now') < strftime('%m-%d', p.DateOfBirth))) AS AGE, p.dateconfirmedHIVPositive,v.VisitDate, v.ARVStatusCode,p.ReferredFromID AS 'TESTING POINT',v.NowPregnant,v.NowBreastFeeding FROM tblPatients p JOIN tblVisits v ON p.PatientID = v.PatientID WHERE v.ARVStatusCode = 2 GROUP BY p.PatientID, p.sex, p.DateOfBirth, v.VisitDate, p.ReferredFromID,p.dateconfirmedHIVPositive, v.NowPregnant, v.NowBreastFeeding, v.ARVStatusCode HAVING MIN(v.VisitDate) BETWEEN :StartDate AND :EndDate ORDER BY p.PatientID;"
-}

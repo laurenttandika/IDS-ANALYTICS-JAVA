@@ -62,7 +62,7 @@ xmlns="http://javafx.com/javafx"
 
             <Pane HBox.hgrow="ALWAYS" />
 
-            <ToggleButton fx:id="themeToggle" id="themeToggle" text="Light Mode">
+            <ToggleButton fx:id="themeToggle" id="themeToggle" text="Dark Mode">
                 <tooltip>
                     <Tooltip text="Toggle Dark/Light Mode" />
                 </tooltip>

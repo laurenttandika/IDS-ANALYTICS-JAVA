@@ -1,30 +1,36 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?import javafx.scene.layout.*?>
 <?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
 
-<VBox spacing="15" xmlns:fx="http://javafx.com/fxml"
-    fx:controller="com.example.PredefinedQueryDialogController">
-    <Label text="Select Predefined Query Type" style="-fx-font-weight: bold;" />
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+    fx:controller="com.example.PredefinedQueryDialogController"
+    prefWidth="400" prefHeight="300"
+    styleClass="dialog-pane">
 
-    <HBox spacing="10">
-        <Label text="Query Type:" />
-        <ComboBox fx:id="queryTypeComboBox" prefWidth="200" />
-    </HBox>
+    <center>
+        <VBox spacing="15" alignment="CENTER_LEFT">
+            <Label text="📊 Select Query Type" styleClass="dialog-header" />
 
-    <HBox spacing="10">
-        <Label text="Start Date:" />
-        <DatePicker fx:id="startDatePicker" />
-    </HBox>
+            <ComboBox fx:id="queryTypeComboBox" prefWidth="300" />
 
-    <HBox spacing="10">
-        <Label text="End Date:" />
-        <DatePicker fx:id="endDatePicker" />
-    </HBox>
+            <HBox spacing="10" alignment="CENTER_LEFT">
+                <Label text="Start Date:" />
+                <DatePicker fx:id="startDatePicker" />
+            </HBox>
 
-    <HBox spacing="20" alignment="CENTER_RIGHT">
-        <Button text="Cancel" onAction="#onCancelClicked" />
-        <Button text="Run" onAction="#onConfirmClicked" />
-    </HBox>
-</VBox>
+            <HBox spacing="10" alignment="CENTER_LEFT">
+                <Label text="End Date:" />
+                <DatePicker fx:id="endDatePicker" />
+            </HBox>
+        </VBox>
+    </center>
+
+    <bottom>
+        <HBox spacing="10" alignment="CENTER_RIGHT">
+            <Button text="Cancel" onAction="#onCancelClicked" />
+            <Button text="Run Query" onAction="#onConfirmClicked" />
+        </HBox>
+    </bottom>
+</BorderPane>

@@ -76,8 +76,8 @@ public class MainController {
     // for dark mode/light
     public void setScene(Scene scene) {
         this.scene = scene;
-        if (!scene.getStylesheets().contains(DARK_THEME)) {
-            scene.getStylesheets().add(DARK_THEME); // default
+        if (!scene.getStylesheets().contains(LIGHT_THEME)) {
+            scene.getStylesheets().add(LIGHT_THEME); // default
         }
     }
 
@@ -101,7 +101,7 @@ public class MainController {
         importedCountLabel.textProperty().bind(Bindings.size(allMdbSources).asString("( %d )"));
 
         // Dark mode toggle behavior
-        themeToggle.setSelected(true);
+        themeToggle.setSelected(false);
         themeToggle.setOnAction(e -> {
             if (themeToggle.isSelected()) {
                 themeToggle.setText("Light Mode");
@@ -509,9 +509,11 @@ public class MainController {
             // ✅ Get the current window as the owner
             Stage primaryStage = (Stage) queryArea.getScene().getWindow();
             dialogStage.initOwner(primaryStage);
+            Scene dialogScene = new Scene(dialogRoot);
+            dialogScene.getStylesheets().add(getClass().getResource("/dialog.css").toExternalForm());
 
-            dialogStage.setScene(new Scene(dialogRoot));
-            dialogStage.setWidth(300);
+            dialogStage.setScene(dialogScene);
+            dialogStage.setWidth(260);
             dialogStage.setHeight(220);
             controller.setDialogStage(dialogStage);
             dialogStage.showAndWait();

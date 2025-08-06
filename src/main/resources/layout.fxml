@@ -53,13 +53,15 @@ xmlns="http://javafx.com/javafx"
             <Button text="🔁 Merge MDBs" onAction="#onMergeImportClicked" />
             <Separator orientation="VERTICAL" />
             <Button text="🧪 Run Query" onAction="#onRunQueryClicked" />
+
+            <!-- ✅ Fixed: Place MenuButton directly -->
+            <Button text="📊 Predefined Queries" onAction="#onPredefinedQueryDialogClicked" />
+
             <Button fx:id="exportButton" text="💾 Export to CSV" onAction="#onExportClicked"
                 visible="false" />
 
-            <!-- Spacer to push the toggle button to the far right -->
             <Pane HBox.hgrow="ALWAYS" />
 
-            <!-- Theme toggle button -->
             <ToggleButton fx:id="themeToggle" id="themeToggle" text="Light Mode">
                 <tooltip>
                     <Tooltip text="Toggle Dark/Light Mode" />

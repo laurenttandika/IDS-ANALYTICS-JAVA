@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.geometry.Insets?>
+
+<VBox spacing="15" xmlns:fx="http://javafx.com/fxml"
+    fx:controller="com.example.PredefinedQueryDialogController">
+    <Label text="Select Predefined Query Type" style="-fx-font-weight: bold;" />
+
+    <HBox spacing="10">
+        <Label text="Query Type:" />
+        <ComboBox fx:id="queryTypeComboBox" prefWidth="200" />
+    </HBox>
+
+    <HBox spacing="10">
+        <Label text="Start Date:" />
+        <DatePicker fx:id="startDatePicker" />
+    </HBox>
+
+    <HBox spacing="10">
+        <Label text="End Date:" />
+        <DatePicker fx:id="endDatePicker" />
+    </HBox>
+
+    <HBox spacing="20" alignment="CENTER_RIGHT">
+        <Button text="Cancel" onAction="#onCancelClicked" />
+        <Button text="Run" onAction="#onConfirmClicked" />
+    </HBox>
+</VBox>

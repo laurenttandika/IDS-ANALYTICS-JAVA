@@ -8,10 +8,14 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
+import javafx.stage.Modality;
+import javafx.stage.Stage;
 
 import java.io.File;
 import java.io.IOException;
@@ -20,6 +24,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.*;
+import java.time.LocalDate;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -65,6 +70,8 @@ public class MainController {
 
     private ObservableList<String> allMdbSources;
     private FilteredList<String> filteredMdbList;
+
+    private PredefinedQueryController queryController = new PredefinedQueryController();
 
     // for dark mode/light
     public void setScene(Scene scene) {
@@ -489,11 +496,54 @@ public class MainController {
         }
     }
 
-    private void showAlert(String title, String message) {
+    public void onPredefinedQueryDialogClicked() {
+        try {
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("/PredefinedQueryDialog.fxml"));
+            Parent dialogRoot = loader.load();
+
+            PredefinedQueryDialogController controller = loader.getController();
+            Stage dialogStage = new Stage();
+            dialogStage.setTitle("Predefined Query");
+            dialogStage.initModality(Modality.APPLICATION_MODAL);
+
+            // ✅ Get the current window as the owner
+            Stage primaryStage = (Stage) queryArea.getScene().getWindow();
+            dialogStage.initOwner(primaryStage);
+
+            dialogStage.setScene(new Scene(dialogRoot));
+            dialogStage.setWidth(300);
+            dialogStage.setHeight(220);
+            controller.setDialogStage(dialogStage);
+            dialogStage.showAndWait();
+
+            if (controller.isConfirmed()) {
+                String queryType = controller.getSelectedQueryType();
+                LocalDate startDate = controller.getSelectedStartDate();
+                LocalDate endDate = controller.getSelectedEndDate();
+
+                // Call your predefined query execution logic
+                queryController.setSqliteConnection(this.sqliteConnection);
+                queryController.setQueryDisplay(this.queryArea, this.resultTable, this.exportButton,
+                        this);
+
+                queryController.runPredefiendQuery(queryType, startDate, endDate);
+            }
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            showAlert("Dialog Error", "Failed to load predefined query dialog.");
+        }
+    }
+
+    public void showAlert(String title, String message) {
         Alert alert = new Alert(Alert.AlertType.ERROR);
         alert.initOwner(mdbListView.getScene().getWindow()); // 👈 anchor to main window
         alert.setTitle(title);
         alert.setContentText(message);
         alert.showAndWait();
+    }
+
+    public void updateResults(ObservableList<ObservableList<String>> data) {
+        currentResults = data;
     }
 }

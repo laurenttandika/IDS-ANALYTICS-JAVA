@@ -29,7 +29,8 @@ public class PredefinedQueryDialogController {
     public void initialize() {
         queryTypeComboBox.getItems().addAll(
                 "TX_NEW",
-                "HTS_TST");
+                "HTS_TST",
+                "HTS_SELF");
         queryTypeComboBox.getSelectionModel().selectFirst();
     }
 

@@ -19,7 +19,6 @@ import javafx.stage.Stage;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -29,7 +28,6 @@ import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 
 public class MainController {
     @FXML
@@ -72,6 +70,9 @@ public class MainController {
     private FilteredList<String> filteredMdbList;
 
     private PredefinedQueryController queryController = new PredefinedQueryController();
+    private final java.util.concurrent.ScheduledExecutorService progressExec = java.util.concurrent.Executors
+            .newSingleThreadScheduledExecutor();
+    private java.util.concurrent.ScheduledFuture<?> progressTask;
 
     // for dark mode/light
     public void setScene(Scene scene) {
@@ -468,32 +469,53 @@ public class MainController {
         executeQueryAndDisplay(query);
     }
 
+    @FXML
     public void onExportClicked() {
-        if (currentResults.isEmpty()) {
+        // Use the TableView as the single source of truth
+        if (resultTable.getItems() == null || resultTable.getItems().isEmpty()) {
             showAlert("No Data", "There are no query results to export.");
             return;
         }
 
+        // Choose file
         FileChooser chooser = new FileChooser();
         chooser.setTitle("Save CSV File");
         chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("CSV files (*.csv)", "*.csv"));
-        File file = chooser.showSaveDialog(null);
+        File file = chooser.showSaveDialog(resultTable.getScene().getWindow());
+        if (file == null)
+            return;
 
-        if (file != null) {
-            try (PrintWriter writer = new PrintWriter(file)) {
-                writer.println(String.join(",", currentColumnHeaders));
-                for (ObservableList<String> row : currentResults) {
-                    writer.println(row.stream()
-                            .map(val -> val != null ? "\"" + val.replace("\"", "\"\"") + "\"" : "")
-                            .collect(Collectors.joining(",")));
+        // Build header from column titles
+        List<TableColumn<ObservableList<String>, ?>> cols = new ArrayList<>(resultTable.getColumns());
+        String header = cols.stream()
+                .map(c -> csvEscape(c.getText()))
+                .collect(java.util.stream.Collectors.joining(","));
+
+        try (java.io.PrintWriter out = new java.io.PrintWriter(file, java.nio.charset.StandardCharsets.UTF_8)) {
+            out.println(header);
+
+            // Each row is ObservableList<String> in your setup
+            for (ObservableList<String> row : resultTable.getItems()) {
+                String line = "";
+                for (int i = 0; i < cols.size(); i++) {
+                    // Row i-th value (defensive if sizes mismatch)
+                    String val = (i < row.size() && row.get(i) != null) ? row.get(i) : "";
+                    line += (i == 0 ? "" : ",") + csvEscape(val);
                 }
-
-                showAlert("Success", "Query results exported successfully.");
-            } catch (Exception e) {
-                e.printStackTrace();
-                showAlert("Error", "Failed to export CSV: " + e.getMessage());
+                out.println(line);
             }
+        } catch (Exception e) {
+            showAlert("Export Error", e.getMessage());
         }
+    }
+
+    // Minimal CSV escaping: wrap in quotes and double any internal quotes
+    private static String csvEscape(String s) {
+        String v = (s == null) ? "" : s;
+        if (v.contains("\"") || v.contains(",") || v.contains("\n") || v.contains("\r")) {
+            v = "\"" + v.replace("\"", "\"\"") + "\"";
+        }
+        return v;
     }
 
     public void onPredefinedQueryDialogClicked() {
@@ -506,15 +528,16 @@ public class MainController {
             dialogStage.setTitle("Predefined Query");
             dialogStage.initModality(Modality.APPLICATION_MODAL);
 
-            // ✅ Get the current window as the owner
+            // Owner is current main stage
             Stage primaryStage = (Stage) queryArea.getScene().getWindow();
             dialogStage.initOwner(primaryStage);
+
             Scene dialogScene = new Scene(dialogRoot);
             dialogScene.getStylesheets().add(getClass().getResource("/dialog.css").toExternalForm());
-
             dialogStage.setScene(dialogScene);
             dialogStage.setWidth(260);
             dialogStage.setHeight(220);
+
             controller.setDialogStage(dialogStage);
             dialogStage.showAndWait();
 
@@ -523,18 +546,60 @@ public class MainController {
                 LocalDate startDate = controller.getSelectedStartDate();
                 LocalDate endDate = controller.getSelectedEndDate();
 
-                // Call your predefined query execution logic
+                // Set up connection and displays
                 queryController.setSqliteConnection(this.sqliteConnection);
-                queryController.setQueryDisplay(this.queryArea, this.resultTable, this.exportButton,
-                        this);
+                queryController.setQueryDisplay(this.queryArea, this.resultTable, this.exportButton);
 
-                queryController.runPredefiendQuery(queryType, startDate, endDate);
+                // Show spinner / disable UI
+                statusLabel.setText("Running query...");
+                importProgress.setProgress(0); // indeterminate
+
+                // Run in background thread
+                new Thread(() -> {
+                    try {
+                        // Progress simulation
+                        this.startSimulatedProgress();
+
+                        queryController.runPredefiendQuery(queryType, startDate, endDate, () -> {
+                            // stop simulator and fill bar when done
+                            if (progressTask != null)
+                                progressTask.cancel(true);
+                            Platform.runLater(() -> {
+                                importProgress.setProgress(1.0);
+                                statusLabel.setText("Query complete.");
+                            });
+                        });
+                    } catch (Exception e) {
+                        Platform.runLater(() -> showAlert("Query Error", e.getMessage()));
+                    } finally {
+                        // Platform.runLater(() -> {
+                        // statusLabel.setText("Query complete.");
+                        // importProgress.setProgress(1.0);
+                        // });
+                    }
+                }, "predefined-query-thread").start();
             }
 
         } catch (IOException e) {
             e.printStackTrace();
             showAlert("Dialog Error", "Failed to load predefined query dialog.");
         }
+    }
+
+    private void startSimulatedProgress() {
+        // cancel any previous simulator
+        if (progressTask != null && !progressTask.isDone()) {
+            progressTask.cancel(true);
+        }
+
+        final double[] prog = { 0.0 };
+        progressTask = progressExec.scheduleAtFixedRate(() -> {
+            if (prog[0] >= 0.9)
+                return; // cap at 90% until completion callback
+            prog[0] += 0.05; // tick size
+            double p = prog[0];
+            Platform.runLater(() -> importProgress.setProgress(p));
+        }, 0, 300, java.util.concurrent.TimeUnit.MILLISECONDS);
     }
 
     public void showAlert(String title, String message) {

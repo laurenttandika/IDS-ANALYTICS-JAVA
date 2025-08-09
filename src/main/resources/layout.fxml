@@ -2,53 +2,18 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
-
-<!--<BorderPane
-xmlns="http://javafx.com/javafx"
-    xmlns:fx="http://javafx.com/fxml"
-    fx:controller="com.example.MainController">
-
-    - Top Status Bar -
-    <top>
-        <HBox spacing="10">
-            <Button text="Fresh Import" onAction="#onFreshImportClicked" />
-            <Button text="Merge to Existing" onAction="#onMergeImportClicked" />
-            <ProgressBar fx:id="importProgress" prefWidth="300" />
-            <Label fx:id="statusLabel" text="Status..." />
-        </HBox>
-    </top>
-
-    - Left Sidebar: Tree View + MDB Sources -
-    <left>
-        <VBox spacing="10">
-            <Label text="Tables" />
-            <TreeView fx:id="tableTreeView" VBox.vgrow="ALWAYS" />
-            <Label text="Imported MDBs" />
-            <ListView fx:id="mdbListView" VBox.vgrow="ALWAYS" />
-            <Label text="Failed Imports" />
-            <ListView fx:id="failedImportsListView" VBox.vgrow="ALWAYS" />
-        </VBox>
-    </left>
-
-    - Center: Query + Results -
-    <center>
-        <VBox spacing="10">
-            <Label text="SQL Query" />
-            <TextArea fx:id="queryArea" prefRowCount="12" VBox.vgrow="NEVER" />
-            <HBox spacing="10">
-                <Button text="Run Query" onAction="#onRunQueryClicked" />
-                <Button fx:id="exportButton" text="Export to CSV" onAction="#onExportClicked"
-                    visible="false" />
-            </HBox>
-            <TableView fx:id="resultTable" VBox.vgrow="ALWAYS" />
-        </VBox>
-    </center>
-
-</BorderPane>-->
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
 
 <BorderPane fx:controller="com.example.MainController" xmlns:fx="http://javafx.com/fxml">
     <top>
         <ToolBar>
+            <ImageView fitHeight="24" fitWidth="24">
+                <image>
+                    <Image url="@/images/logo.png" />
+                </image>
+            </ImageView>
+            <Label text="IDS Analytics" style="-fx-font-size: 16px; -fx-font-weight: bold;" />
             <Button text="📁 Import MDBs" onAction="#onFreshImportClicked" />
             <Button text="🔁 Merge MDBs" onAction="#onMergeImportClicked" />
             <Separator orientation="VERTICAL" />
@@ -89,7 +54,10 @@ xmlns="http://javafx.com/javafx"
 
             <VBox spacing="10">
                 <Label text="📝 SQL Query:" style="-fx-font-weight: bold;" />
-                <TextArea fx:id="queryArea" prefRowCount="8" VBox.vgrow="NEVER" />
+                <ScrollPane fitToHeight="true" fitToWidth="true" hbarPolicy="AS_NEEDED"
+                    vbarPolicy="AS_NEEDED">
+                    <TextArea fx:id="queryArea" prefRowCount="8" VBox.vgrow="NEVER" />
+                </ScrollPane>
                 <TableView fx:id="resultTable" VBox.vgrow="ALWAYS" />
             </VBox>
         </SplitPane>

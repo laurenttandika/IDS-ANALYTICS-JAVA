@@ -10,3 +10,7 @@
     -fx-font-size: 16px;
     -fx-font-weight: bold;
 }
+
+#dialog_bottom {
+    -fx-padding: 6px 0 0 0;
+}

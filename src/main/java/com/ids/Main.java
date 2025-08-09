@@ -1,4 +1,4 @@
-package com.example;
+package com.ids;
 
 import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
@@ -16,7 +16,7 @@ public class Main extends Application {
         MainController controller = loader.getController();
         controller.setScene(scene);
 
-        stage.setTitle("MDB to SQLite Viewer");
+        stage.setTitle("IDS Analytics");
         // ✅ Set logo in title bar
         stage.getIcons().add(new Image(getClass().getResourceAsStream("/images/logo.png")));
         stage.setScene(scene);

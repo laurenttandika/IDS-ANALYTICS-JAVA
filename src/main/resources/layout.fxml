@@ -5,7 +5,7 @@
 <?import javafx.scene.image.Image?>
 <?import javafx.scene.image.ImageView?>
 
-<BorderPane fx:controller="com.example.MainController" xmlns:fx="http://javafx.com/fxml">
+<BorderPane fx:controller="com.ids.MainController" xmlns:fx="http://javafx.com/fxml">
     <top>
         <ToolBar>
             <ImageView fitHeight="24" fitWidth="24">

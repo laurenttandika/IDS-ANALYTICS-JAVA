@@ -1,4 +1,4 @@
-package com.example;
+package com.ids;
 
 import com.healthmarketscience.jackcess.*;
 import javafx.application.Platform;
@@ -535,8 +535,10 @@ public class MainController {
             Scene dialogScene = new Scene(dialogRoot);
             dialogScene.getStylesheets().add(getClass().getResource("/dialog.css").toExternalForm());
             dialogStage.setScene(dialogScene);
-            dialogStage.setWidth(260);
-            dialogStage.setHeight(220);
+            dialogStage.setWidth(300);
+            dialogStage.setHeight(275);
+            dialogStage.setResizable(false); // ✅ Prevent resizing
+            dialogStage.centerOnScreen();
 
             controller.setDialogStage(dialogStage);
             dialogStage.showAndWait();
@@ -545,6 +547,17 @@ public class MainController {
                 String queryType = controller.getSelectedQueryType();
                 LocalDate startDate = controller.getSelectedStartDate();
                 LocalDate endDate = controller.getSelectedEndDate();
+
+                if (startDate == null || endDate == null) {
+                    showAlert("Missing Dates", "Please select both Start Date and End Date before running the query.");
+                    return; // Stop execution
+                }
+
+                // Check if start date is after end date
+                if (startDate.isAfter(endDate)) {
+                    showAlert("Invalid Date Range", "Start Date cannot be after End Date.");
+                    return;
+                }
 
                 // Set up connection and displays
                 queryController.setSqliteConnection(this.sqliteConnection);

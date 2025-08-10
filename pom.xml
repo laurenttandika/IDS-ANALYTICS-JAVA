@@ -2,14 +2,16 @@
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
-  <groupId>com.example</groupId>
+  <groupId>com.ids</groupId>
   <artifactId>mdb-viewer</artifactId>
   <version>1.0-SNAPSHOT</version>
 
   <properties>
     <maven.compiler.source>17</maven.compiler.source>
     <maven.compiler.target>17</maven.compiler.target>
-    <javafx.version>21</javafx.version>
+    <javafx.version>17</javafx.version>
+    <dollar>$</dollar>
+    <javafx.sdk.lib>/Users/laurenttandika/Library/JavaFx/javafx-sdk-17/lib</javafx.sdk.lib>
   </properties>
 
   <dependencies>
@@ -55,4 +57,228 @@
     </dependency>
 
   </dependencies>
+
+  <build>
+    <plugins>
+      <!-- Copy JavaFX SDK lib into target/javafx -->
+      <plugin>
+        <artifactId>maven-resources-plugin</artifactId>
+        <version>3.3.1</version>
+        <executions>
+          <execution>
+            <id>copy-javafx-sdk</id>
+            <phase>prepare-package</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/javafx</outputDirectory>
+              <resources>
+                <resource>
+                  <!-- Your local JavaFX SDK 'lib' folder -->
+                  <directory>${javafx.sdk.lib}</directory>
+                  <filtering>false</filtering>
+                  <includes>
+                    <include>**/*</include>
+                  </includes>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Java compiler -->
+      <plugin>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.11.0</version>
+        <configuration>
+          <release>17</release>
+        </configuration>
+      </plugin>
+
+      <!-- JavaFX run support -->
+      <plugin>
+        <groupId>org.openjfx</groupId>
+        <artifactId>javafx-maven-plugin</artifactId>
+        <version>0.0.8</version>
+        <configuration>
+          <mainClass>com.ids.Main</mainClass>
+
+          <!-- The modules you use -->
+          <addModules>javafx.controls,javafx.fxml</addModules>
+
+          <!-- Trim runtime -->
+          <stripDebug>true</stripDebug>
+          <noHeaderFiles>true</noHeaderFiles>
+          <noManPages>true</noManPages>
+
+          <!-- Name of the generated runtime image folder -->
+          <launcher>IDSAnalytics</launcher>
+        </configuration>
+      </plugin>
+
+      <!-- Fat JAR packaging -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>3.5.0</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <!-- Create a separate -shaded.jar (keeps the original thin jar too) -->
+              <shadedArtifactAttached>true</shadedArtifactAttached>
+              <shadedClassifierName>shaded</shadedClassifierName>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
+
+              <!-- Drop problematic/irrelevant resources -->
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <!-- JPMS descriptor: shading breaks encapsulation; strip it -->
+                    <exclude>module-info.class</exclude>
+                    <!-- Signature files (conflict after shading) -->
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                    <!-- Optional: drop duplicate LICENSE/NOTICE if you don't need them in the uber
+                    jar -->
+                    <!-- <exclude>META-INF/LICENSE*</exclude> -->
+                    <!-- <exclude>META-INF/NOTICE*</exclude> -->
+                  </excludes>
+                </filter>
+              </filters>
+
+              <!-- Merge service descriptors so ServiceLoader continues to work -->
+              <transformers>
+                <!-- Keep your app's Main -->
+                <transformer
+                  implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                  <mainClass>com.ids.Main</mainClass>
+                </transformer>
+                <!-- Merge META-INF/services/* files -->
+                <transformer
+                  implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
+                <!-- (Optional) If you rely on logging or other resource bundles, you can append
+                specific files:
+          <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+            <resource>META-INF/some.registry</resource>
+          </transformer>
+          -->
+              </transformers>
+
+              <!-- Optional: try to shrink jar; beware if reflection is heavy -->
+              <!-- <minimizeJar>true</minimizeJar> -->
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Maven Exec Plugin to call jpackage -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.2.0</version>
+        <executions>
+          <execution>
+            <id>create-installer</id>
+            <phase>verify</phase> <!-- runs after package/shade -->
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <executable>${java.home}/bin/jpackage</executable>
+              <!-- Run from target so -input . and resource 'javafx' are relative -->
+              <workingDirectory>${project.build.directory}</workingDirectory>
+              <arguments>
+                <argument>--verbose</argument>
+
+                <argument>--name</argument>
+                <argument>IDS Analytics</argument>
+                <argument>--app-version</argument>
+                <argument>1.0.0</argument>
+                <argument>--vendor</argument>
+                <argument>IDS</argument>
+
+                <!-- Input must be the dir that contains the main jar -->
+                <argument>--input</argument>
+                <argument>.</argument>
+                <!-- If you build a shaded jar, use the -shaded name -->
+                <argument>--main-jar</argument>
+                <argument>${project.build.finalName}-shaded.jar</argument>
+                <!-- If you DON'T shade, switch to:
+                <argument>${project.build.finalName}.jar</argument> -->
+
+                <argument>--main-class</argument>
+                <argument>com.ids.Main</argument>
+
+                <argument>--dest</argument>
+                <argument>dist</argument>
+                <argument>--type</argument>
+                <argument>${pkg.type}</argument>
+
+                <argument>--icon</argument>
+                <argument>${basedir}/src/main/resources/images/icon.${pkg.iconExt}</argument>
+
+                <!-- Include the 'javafx' folder (copied above) inside the app -->
+                <argument>--resource-dir</argument>
+                <argument>.</argument>
+
+                <!-- Make launcher use bundled JavaFX -->
+                <argument>--java-options</argument>
+                <argument>--module-path ${dollar}APPDIR/javafx --add-modules
+                  javafx.controls,javafx.fxml</argument>
+              </arguments>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+  <!-- OS-specific packaging profiles -->
+  <profiles>
+    <profile>
+      <id>mac</id>
+      <activation>
+        <os>
+          <family>mac</family>
+        </os>
+      </activation>
+      <properties>
+        <pkg.type>dmg</pkg.type>
+        <pkg.iconExt>icns</pkg.iconExt>
+      </properties>
+    </profile>
+    <profile>
+      <id>windows</id>
+      <activation>
+        <os>
+          <family>windows</family>
+        </os>
+      </activation>
+      <properties>
+        <pkg.type>msi</pkg.type>
+        <pkg.iconExt>ico</pkg.iconExt>
+      </properties>
+    </profile>
+    <!--<profile>
+      <id>linux</id>
+      <activation>
+        <os>
+          <family>unix</family>
+        </os>
+      </activation>
+      <properties>
+        <pkg.type>deb</pkg.type>- or rpm -
+        <pkg.iconExt>png</pkg.iconExt>
+      </properties>
+    </profile>-->
+  </profiles>
+
 </project>

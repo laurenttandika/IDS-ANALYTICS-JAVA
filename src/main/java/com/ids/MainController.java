@@ -74,6 +74,9 @@ public class MainController {
             .newSingleThreadScheduledExecutor();
     private java.util.concurrent.ScheduledFuture<?> progressTask;
 
+    private Path appDataDir;
+    private Path dbPath;
+
     // for dark mode/light
     public void setScene(Scene scene) {
         this.scene = scene;
@@ -83,55 +86,71 @@ public class MainController {
     }
 
     public void initialize() {
+        // Context menu + failed imports
         mdbListView.setContextMenu(createMdbListContextMenu());
         failedImportsListView.setItems(failedImports);
 
-        // Set up filter for mdbListView
+        // Searchable "Imported MDBs" list
         allMdbSources = FXCollections.observableArrayList();
         filteredMdbList = new FilteredList<>(allMdbSources, s -> true);
         mdbListView.setItems(filteredMdbList);
-
-        mdbSearchField.textProperty().addListener((obs, oldVal, newVal) -> {
-            filteredMdbList.setPredicate(item -> {
-                if (newVal == null || newVal.isBlank())
-                    return true;
-                return item.toLowerCase().contains(newVal.toLowerCase());
-            });
-        });
-
+        mdbSearchField.textProperty().addListener((obs, oldVal, newVal) -> filteredMdbList.setPredicate(
+                item -> newVal == null || newVal.isBlank() || item.toLowerCase().contains(newVal.toLowerCase())));
         importedCountLabel.textProperty().bind(Bindings.size(allMdbSources).asString("( %d )"));
 
-        // Dark mode toggle behavior
+        // Theme toggle (hook scene safely after attach)
         themeToggle.setSelected(false);
-        themeToggle.setOnAction(e -> {
-            if (themeToggle.isSelected()) {
-                themeToggle.setText("Light Mode");
-                scene.getStylesheets().remove(LIGHT_THEME);
-                if (!scene.getStylesheets().contains(DARK_THEME)) {
-                    scene.getStylesheets().add(DARK_THEME);
-                }
-            } else {
+        Platform.runLater(() -> {
+            Scene sc = statusLabel.getScene(); // any node already in the scene works
+            if (sc != null) {
+                // ensure one theme present at start
+                if (!sc.getStylesheets().contains(LIGHT_THEME))
+                    sc.getStylesheets().add(LIGHT_THEME);
                 themeToggle.setText("Dark Mode");
-                scene.getStylesheets().remove(DARK_THEME);
-                if (!scene.getStylesheets().contains(LIGHT_THEME)) {
-                    scene.getStylesheets().add(LIGHT_THEME);
-                }
+                themeToggle.setOnAction(e -> {
+                    if (themeToggle.isSelected()) {
+                        themeToggle.setText("Light Mode");
+                        sc.getStylesheets().remove(LIGHT_THEME);
+                        if (!sc.getStylesheets().contains(DARK_THEME))
+                            sc.getStylesheets().add(DARK_THEME);
+                    } else {
+                        themeToggle.setText("Dark Mode");
+                        sc.getStylesheets().remove(DARK_THEME);
+                        if (!sc.getStylesheets().contains(LIGHT_THEME))
+                            sc.getStylesheets().add(LIGHT_THEME);
+                    }
+                });
             }
         });
 
+        // DB: only connect if file exists; otherwise just update status label.
         try {
-            File dbFile = new File("converted.db");
+            if (appDataDir == null)
+                initStorage();
+
+            File dbFile = dbPath.toFile();
             if (dbFile.exists()) {
-                sqliteConnection = DriverManager.getConnection("jdbc:sqlite:converted.db");
-                loadTablesIntoTreeView(sqliteConnection);
-                loadMdbSourcesList(sqliteConnection);
-                statusLabel.setText("✅ Loaded existing converted.db");
+                sqliteConnection = DriverManager.getConnection("jdbc:sqlite:" + dbPath);
+
+                // ✅ Check if there are any tables in the DB
+                try (ResultSet rs = sqliteConnection.getMetaData().getTables(null, null, "%",
+                        new String[] { "TABLE" })) {
+                    if (rs.next()) {
+                        // There is at least one table → load data into UI
+                        loadTablesIntoTreeView(sqliteConnection);
+                        loadMdbSourcesList(sqliteConnection);
+                        statusLabel.setText("✅ Loaded existing converted.db");
+                    } else {
+                        statusLabel.setText("ℹ️ Database is empty. Please import MDBs.");
+                    }
+                }
             } else {
                 statusLabel.setText("ℹ️ No existing database found. Please import MDBs.");
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
-            showAlert("Error", "Failed to load existing database: " + e.getMessage());
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+            showAlert("Error", "Failed to load existing database: " + ex.getMessage());
+            statusLabel.setText("⚠️ Failed to load database.");
         }
     }
 
@@ -189,11 +208,17 @@ public class MainController {
 
         try {
             if (freshImport) {
-                Files.deleteIfExists(Paths.get("converted.db"));
-                sqliteConnection = DriverManager.getConnection("jdbc:sqlite:converted.db");
+                // Files.deleteIfExists(Paths.get("converted.db"));
+                // sqliteConnection = DriverManager.getConnection("jdbc:sqlite:converted.db");
+                if (appDataDir == null)
+                    initStorage();
+                Files.deleteIfExists(dbPath);
+                sqliteConnection = DriverManager.getConnection("jdbc:sqlite:" + dbPath.toString());
             } else {
                 if (sqliteConnection == null || sqliteConnection.isClosed()) {
-                    sqliteConnection = DriverManager.getConnection("jdbc:sqlite:converted.db");
+                    if (appDataDir == null)
+                        initStorage();
+                    sqliteConnection = DriverManager.getConnection("jdbc:sqlite:" + dbPath.toString());
                 }
             }
 
@@ -227,10 +252,10 @@ public class MainController {
         try {
             if (sqliteConnection != null)
                 sqliteConnection.close();
-            File dbFile = new File("converted.db");
-            if (dbFile.exists())
-                dbFile.delete();
-            sqliteConnection = DriverManager.getConnection("jdbc:sqlite:converted.db");
+            if (appDataDir == null)
+                initStorage();
+            Files.deleteIfExists(dbPath);
+            sqliteConnection = DriverManager.getConnection("jdbc:sqlite:" + dbPath.toString());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -625,5 +650,34 @@ public class MainController {
 
     public void updateResults(ObservableList<ObservableList<String>> data) {
         currentResults = data;
+    }
+
+    private void initStorage() {
+        appDataDir = getAppDataDir("IDS Analytics");
+        try {
+            Files.createDirectories(appDataDir);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create app data dir: " + appDataDir, e);
+        }
+        dbPath = appDataDir.resolve("converted.db");
+
+        // Make sure SQLite temp files go to a writable place too
+        System.setProperty("org.sqlite.tmpdir", appDataDir.toString());
+    }
+
+    private static Path getAppDataDir(String appName) {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (os.contains("mac")) {
+            return Paths.get(System.getProperty("user.home"), "Library", "Application Support", appName);
+        } else if (os.contains("win")) {
+            String roaming = System.getenv("APPDATA");
+            if (roaming != null && !roaming.isBlank()) {
+                return Paths.get(roaming, appName);
+            }
+            return Paths.get(System.getProperty("user.home"), "AppData", "Roaming", appName);
+        } else {
+            // Linux / Unix
+            return Paths.get(System.getProperty("user.home"), ".local", "share", appName);
+        }
     }
 }

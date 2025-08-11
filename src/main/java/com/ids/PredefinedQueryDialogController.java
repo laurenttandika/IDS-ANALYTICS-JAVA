@@ -30,7 +30,8 @@ public class PredefinedQueryDialogController {
         queryTypeComboBox.getItems().addAll(
                 "TX_NEW",
                 "HTS_TST",
-                "HTS_SELF");
+                "HTS_SELF",
+                "HTS_INDEX_ELICITATION");
         queryTypeComboBox.getSelectionModel().selectFirst();
     }
 

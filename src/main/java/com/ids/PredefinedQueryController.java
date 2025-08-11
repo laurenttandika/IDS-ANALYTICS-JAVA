@@ -50,16 +50,7 @@ public class PredefinedQueryController {
         javafx.concurrent.Task<QueryPayload> task = new javafx.concurrent.Task<>() {
             @Override
             protected QueryPayload call() throws Exception {
-                switch (queryType) {
-                    case "TX_NEW":
-                        return buildTxNewPayload(startStr, endStr); // DB work only
-                    case "HTS_TST":
-                        return buildHtsTstPayload(startStr, endStr); // DB work only
-                    case "HTS_SELF":
-                        return buildHtsSelfPayload(startStr, endStr); // DB work only
-                    default:
-                        throw new IllegalArgumentException("Unknown predefined query: " + queryType);
-                }
+                return buildPayload(startStr, endStr, queryType); // DB work only
             }
         };
 
@@ -139,60 +130,16 @@ public class PredefinedQueryController {
      * - read ResultSet into plain lists (NO JavaFX classes)
      * - return new QueryPayload(headers, rows, sql)
      */
-    private QueryPayload buildHtsTstPayload(String startStr, String endStr) throws SQLException {
-        String sql = QueryLoader.getQuery("HTS_TST");
-        try (PreparedStatement ps = sqliteConnection.prepareStatement(sql)) {
-            ps.setString(1, startStr);
-            ps.setString(2, endStr);
-            try (ResultSet rs = ps.executeQuery()) {
-                java.util.List<String> headers = new java.util.ArrayList<>();
-                java.util.List<java.util.List<String>> rows = new java.util.ArrayList<>();
-                ResultSetMetaData md = rs.getMetaData();
-                int cols = md.getColumnCount();
-                for (int i = 1; i <= cols; i++)
-                    headers.add(md.getColumnLabel(i));
-                while (rs.next()) {
-                    java.util.List<String> row = new java.util.ArrayList<>(cols);
-                    for (int i = 1; i <= cols; i++)
-                        row.add(rs.getString(i));
-                    rows.add(row);
-                }
-                return new QueryPayload(headers, rows, sql);
-            }
-        }
-    }
+    private QueryPayload buildPayload(String startStr, String endStr, String queryType) throws SQLException {
+        String sqlTemplate = QueryLoader.getQuery(queryType);
 
-    private QueryPayload buildTxNewPayload(String startStr, String endStr) throws SQLException {
-        // Similar pattern; compose SQL, bind dates, read headers/rows, return payload
-        String sql = QueryLoader.getQuery("TX_NEW");
-        try (PreparedStatement ps = sqliteConnection.prepareStatement(sql)) {
-            ps.setString(1, startStr);
-            ps.setString(2, endStr);
-            try (ResultSet rs = ps.executeQuery()) {
-                java.util.List<String> headers = new java.util.ArrayList<>();
-                java.util.List<java.util.List<String>> rows = new java.util.ArrayList<>();
-                ResultSetMetaData md = rs.getMetaData();
-                int cols = md.getColumnCount();
-                for (int i = 1; i <= cols; i++)
-                    headers.add(md.getColumnLabel(i));
-                while (rs.next()) {
-                    java.util.List<String> row = new java.util.ArrayList<>(cols);
-                    for (int i = 1; i <= cols; i++)
-                        row.add(rs.getString(i));
-                    rows.add(row);
-                }
-                return new QueryPayload(headers, rows, sql);
-            }
-        }
-        // throw new UnsupportedOperationException("Implement TX_NEW builder");
-    }
+        String sql = sqlTemplate
+                .replace(":STARTDATE", "'" + startStr + "'")
+                .replace(":ENDDATE", "'" + endStr + "'");
 
-    private QueryPayload buildHtsSelfPayload(String startStr, String endStr) throws SQLException {
-        // Similar pattern
-        String sql = QueryLoader.getQuery("HTS_SELF");
         try (PreparedStatement ps = sqliteConnection.prepareStatement(sql)) {
-            ps.setString(1, startStr);
-            ps.setString(2, endStr);
+            // ps.setString(1, startStr);
+            // ps.setString(2, endStr);
             try (ResultSet rs = ps.executeQuery()) {
                 java.util.List<String> headers = new java.util.ArrayList<>();
                 java.util.List<java.util.List<String>> rows = new java.util.ArrayList<>();
@@ -209,7 +156,6 @@ public class PredefinedQueryController {
                 return new QueryPayload(headers, rows, sql);
             }
         }
-        // throw new UnsupportedOperationException("Implement HTS_SELF builder");
     }
 
     // Show errors on FX thread

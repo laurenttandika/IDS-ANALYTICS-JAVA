@@ -77,7 +77,7 @@ public class MainController {
     private Path appDataDir;
     private Path dbPath;
 
-    // for dark mode/light
+    // Allow Main to inject the Scene for theme toggling
     public void setScene(Scene scene) {
         this.scene = scene;
         if (!scene.getStylesheets().contains(LIGHT_THEME)) {
@@ -101,9 +101,8 @@ public class MainController {
         // Theme toggle (hook scene safely after attach)
         themeToggle.setSelected(false);
         Platform.runLater(() -> {
-            Scene sc = statusLabel.getScene(); // any node already in the scene works
+            Scene sc = statusLabel.getScene(); // any node already attached
             if (sc != null) {
-                // ensure one theme present at start
                 if (!sc.getStylesheets().contains(LIGHT_THEME))
                     sc.getStylesheets().add(LIGHT_THEME);
                 themeToggle.setText("Dark Mode");
@@ -136,7 +135,6 @@ public class MainController {
                 try (ResultSet rs = sqliteConnection.getMetaData().getTables(null, null, "%",
                         new String[] { "TABLE" })) {
                     if (rs.next()) {
-                        // There is at least one table → load data into UI
                         loadTablesIntoTreeView(sqliteConnection);
                         loadMdbSourcesList(sqliteConnection);
                         statusLabel.setText("✅ Loaded existing converted.db");
@@ -166,7 +164,7 @@ public class MainController {
 
     private void openFileOrFolderForImport() {
         Alert optionDialog = new Alert(Alert.AlertType.CONFIRMATION);
-        optionDialog.initOwner(mdbListView.getScene().getWindow()); // 👈 anchor to main window
+        optionDialog.initOwner(mdbListView.getScene().getWindow());
         optionDialog.setTitle("Select Input Type");
         optionDialog.setHeaderText("Choose import source:");
         ButtonType fileButton = new ButtonType("Select Files");
@@ -208,17 +206,15 @@ public class MainController {
 
         try {
             if (freshImport) {
-                // Files.deleteIfExists(Paths.get("converted.db"));
-                // sqliteConnection = DriverManager.getConnection("jdbc:sqlite:converted.db");
                 if (appDataDir == null)
                     initStorage();
                 Files.deleteIfExists(dbPath);
-                sqliteConnection = DriverManager.getConnection("jdbc:sqlite:" + dbPath.toString());
+                sqliteConnection = DriverManager.getConnection("jdbc:sqlite:" + dbPath);
             } else {
                 if (sqliteConnection == null || sqliteConnection.isClosed()) {
                     if (appDataDir == null)
                         initStorage();
-                    sqliteConnection = DriverManager.getConnection("jdbc:sqlite:" + dbPath.toString());
+                    sqliteConnection = DriverManager.getConnection("jdbc:sqlite:" + dbPath);
                 }
             }
 
@@ -241,10 +237,8 @@ public class MainController {
         if (selectedFiles == null || selectedFiles.isEmpty())
             return;
 
-        if (isFresh) {
+        if (isFresh)
             resetConvertedDatabase();
-        }
-
         startAutoMerge(selectedFiles);
     }
 
@@ -255,7 +249,7 @@ public class MainController {
             if (appDataDir == null)
                 initStorage();
             Files.deleteIfExists(dbPath);
-            sqliteConnection = DriverManager.getConnection("jdbc:sqlite:" + dbPath.toString());
+            sqliteConnection = DriverManager.getConnection("jdbc:sqlite:" + dbPath);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -284,51 +278,61 @@ public class MainController {
             Platform.runLater(() -> {
                 loadTablesIntoTreeView(sqliteConnection);
                 loadMdbSourcesList(sqliteConnection);
-                statusLabel.setText("✅ All MDB files imported.");
+                statusLabel.setText("✅ All MDB files processed.");
+                importProgress.setProgress(1.0);
             });
         }).start();
     }
 
     private void importIfNotExists(File mdbFile) {
+        final boolean[] skipped = { false };
+
+        String hfrCode = "UNKNOWN";
         try (Database mdb = DatabaseBuilder.open(mdbFile)) {
+            // Determine hfrCode
             Table configTable = mdb.getTable("tblConfig");
             Map<String, Integer> hfrCount = new HashMap<>();
             for (Row row : configTable) {
-                String hfr = row.get("HFRCode") != null ? row.get("HFRCode").toString() : null;
-                if (hfr != null)
-                    hfrCount.put(hfr, hfrCount.getOrDefault(hfr, 0) + 1);
+                Object v = row.get("HFRCode");
+                if (v != null) {
+                    String h = v.toString();
+                    hfrCount.put(h, hfrCount.getOrDefault(h, 0) + 1);
+                }
             }
-            String hfrCode = hfrCount.entrySet().stream()
+            hfrCode = hfrCount.entrySet().stream()
                     .max(Map.Entry.comparingByValue())
                     .map(Map.Entry::getKey)
                     .orElse("UNKNOWN");
 
+            // Import or skip
             synchronized (sqliteConnection) {
                 if (isAlreadyImported(hfrCode)) {
+                    skipped[0] = true;
                     String msg = hfrCode + " [ " + mdbFile.getName() + " ] already imported";
                     Platform.runLater(() -> failedImports.add(msg));
-                    return;
+                } else {
+                    try (Statement pragma = sqliteConnection.createStatement()) {
+                        pragma.execute("PRAGMA synchronous = OFF");
+                        pragma.execute("PRAGMA journal_mode = MEMORY");
+                    }
+                    MdbRecordManager.mergeMdbToSqlite(sqliteConnection, mdb, hfrCode, mdbFile.getName());
+                    final String item = hfrCode + " [ " + mdbFile.getName() + " ]";
+                    Platform.runLater(() -> allMdbSources.add(item)); // ✅ update source list, not filtered view
                 }
-
-                try (Statement pragma = sqliteConnection.createStatement()) {
-                    pragma.execute("PRAGMA synchronous = OFF");
-                    pragma.execute("PRAGMA journal_mode = MEMORY");
-                }
-
-                MdbRecordManager.mergeMdbToSqlite(sqliteConnection, mdb, hfrCode, mdbFile.getName());
-                Platform.runLater(() -> mdbListView.getItems().add(hfrCode + " [ " + mdbFile.getName() + " ]"));
             }
 
+        } catch (Exception e) {
+            final String msg = "Failed: [ " + mdbFile.getName() + " ] - " + e.getMessage();
+            Platform.runLater(() -> failedImports.add(msg));
+        } finally {
             int done = completedMdbs.incrementAndGet();
-            double progress = (double) done / totalMdbs;
-
+            double progress = (totalMdbs <= 0) ? 1.0 : (double) done / totalMdbs;
+            final String statusText = "Processed " + done + " / " + totalMdbs + " MDBs"
+                    + (skipped[0] ? " (skipped duplicate)" : "");
             Platform.runLater(() -> {
                 importProgress.setProgress(progress);
-                statusLabel.setText("Imported " + done + " / " + totalMdbs + " MDBs");
+                statusLabel.setText(statusText);
             });
-        } catch (Exception e) {
-            String msg = "Failed: [ " + mdbFile.getName() + " ] - " + e.getMessage();
-            Platform.runLater(() -> failedImports.add(msg));
         }
     }
 
@@ -352,33 +356,54 @@ public class MainController {
     private ContextMenu createMdbListContextMenu() {
         ContextMenu contextMenu = new ContextMenu();
         MenuItem removeItem = new MenuItem("Remove Records");
+
         removeItem.setOnAction(e -> {
             String selected = mdbListView.getSelectionModel().getSelectedItem();
-            if (selected != null && !selected.isEmpty()) {
-                try {
-                    Alert confirmDialog = new Alert(Alert.AlertType.CONFIRMATION);
-                    confirmDialog.initOwner(mdbListView.getScene().getWindow()); // 👈 anchor to main window
-                    confirmDialog.setTitle("Confirm Deletion");
-                    confirmDialog.setHeaderText(null);
-                    confirmDialog
-                            .setContentText("Are you sure you want to remove all records from '" + selected + "'?");
-                    Optional<ButtonType> result = confirmDialog.showAndWait();
+            if (selected == null || selected.isEmpty())
+                return;
 
-                    if (result.isPresent() && result.get() == ButtonType.OK) {
-                        // Extract hfr_code from 'hfr_code [ source_mdb ]'
-                        String hfrCode = selected.split("\\s*\\[")[0].trim();
+            Alert confirmDialog = new Alert(Alert.AlertType.CONFIRMATION);
+            confirmDialog.initOwner(mdbListView.getScene().getWindow());
+            confirmDialog.setTitle("Confirm Deletion");
+            confirmDialog.setHeaderText(null);
+            confirmDialog.setContentText("Are you sure you want to remove all records from '" + selected + "'?");
+            Optional<ButtonType> result = confirmDialog.showAndWait();
+            if (result.isEmpty() || result.get() != ButtonType.OK)
+                return;
+
+            // Extract hfr_code from 'hfr_code [ source_mdb ]'
+            final String hfrCode = selected.split("\\s*\\[")[0].trim();
+
+            // UI: show indeterminate progress
+            statusLabel.setText("Removing records for " + hfrCode + "…");
+            importProgress.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
+
+            // Run the heavy deletion off the FX thread
+            javafx.concurrent.Task<Void> task = new javafx.concurrent.Task<>() {
+                @Override
+                protected Void call() throws Exception {
+                    synchronized (sqliteConnection) {
                         MdbRecordManager.removeRecordsBySource(sqliteConnection, hfrCode);
-                        loadMdbSourcesList(sqliteConnection);
-                        statusLabel.setText("✅ Records from '" + selected + "' removed.");
                     }
-                    loadMdbSourcesList(sqliteConnection);
-                    statusLabel.setText("✅ Records from '" + selected + "' removed.");
-                } catch (SQLException ex) {
-                    ex.printStackTrace();
-                    showAlert("Error", "Failed to remove records: " + ex.getMessage());
+                    return null;
                 }
-            }
+            };
+
+            task.setOnSucceeded(ev -> {
+                importProgress.setProgress(0);
+                loadMdbSourcesList(sqliteConnection); // refresh left list
+                statusLabel.setText("✅ Records from '" + selected + "' removed.");
+            });
+
+            task.setOnFailed(ev -> {
+                importProgress.setProgress(0);
+                Throwable ex = task.getException();
+                showAlert("Error", "Failed to remove records: " + (ex != null ? ex.getMessage() : "Unknown error"));
+            });
+
+            new Thread(task, "remove-records-" + hfrCode).start();
         });
+
         contextMenu.getItems().add(removeItem);
         return contextMenu;
     }
@@ -388,13 +413,11 @@ public class MainController {
             showAlert("Error", "No SQLite database loaded. Please import an MDB file first.");
             return;
         }
-
         String query = queryArea.getText();
         if (query == null || query.isBlank()) {
             showAlert("Error", "Please enter a SQL query.");
             return;
         }
-
         executeQueryAndDisplay(query);
     }
 
@@ -468,8 +491,8 @@ public class MainController {
         try {
             ObservableList<String> sources = FXCollections.observableArrayList();
             Statement stmt = conn.createStatement();
-            ResultSet rs = stmt
-                    .executeQuery("SELECT DISTINCT hfr_code, source_mdb FROM SecurityUsers ORDER BY hfr_code");
+            ResultSet rs = stmt.executeQuery(
+                    "SELECT DISTINCT hfr_code, source_mdb FROM SecurityUsers ORDER BY hfr_code");
             while (rs.next()) {
                 String hfr = rs.getString("hfr_code");
                 String src = rs.getString("source_mdb");
@@ -478,9 +501,7 @@ public class MainController {
                 }
             }
 
-            Platform.runLater(() -> {
-                allMdbSources.setAll(sources); // ✅ safe update
-            });
+            Platform.runLater(() -> allMdbSources.setAll(sources)); // ✅ update source list
 
         } catch (SQLException e) {
             e.printStackTrace();
@@ -496,13 +517,11 @@ public class MainController {
 
     @FXML
     public void onExportClicked() {
-        // Use the TableView as the single source of truth
         if (resultTable.getItems() == null || resultTable.getItems().isEmpty()) {
             showAlert("No Data", "There are no query results to export.");
             return;
         }
 
-        // Choose file
         FileChooser chooser = new FileChooser();
         chooser.setTitle("Save CSV File");
         chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("CSV files (*.csv)", "*.csv"));
@@ -510,31 +529,27 @@ public class MainController {
         if (file == null)
             return;
 
-        // Build header from column titles
         List<TableColumn<ObservableList<String>, ?>> cols = new ArrayList<>(resultTable.getColumns());
-        String header = cols.stream()
-                .map(c -> csvEscape(c.getText()))
+        String header = cols.stream().map(c -> csvEscape(c.getText()))
                 .collect(java.util.stream.Collectors.joining(","));
 
         try (java.io.PrintWriter out = new java.io.PrintWriter(file, java.nio.charset.StandardCharsets.UTF_8)) {
             out.println(header);
-
-            // Each row is ObservableList<String> in your setup
             for (ObservableList<String> row : resultTable.getItems()) {
-                String line = "";
+                StringBuilder sb = new StringBuilder();
                 for (int i = 0; i < cols.size(); i++) {
-                    // Row i-th value (defensive if sizes mismatch)
                     String val = (i < row.size() && row.get(i) != null) ? row.get(i) : "";
-                    line += (i == 0 ? "" : ",") + csvEscape(val);
+                    if (i > 0)
+                        sb.append(',');
+                    sb.append(csvEscape(val));
                 }
-                out.println(line);
+                out.println(sb.toString());
             }
         } catch (Exception e) {
             showAlert("Export Error", e.getMessage());
         }
     }
 
-    // Minimal CSV escaping: wrap in quotes and double any internal quotes
     private static String csvEscape(String s) {
         String v = (s == null) ? "" : s;
         if (v.contains("\"") || v.contains(",") || v.contains("\n") || v.contains("\r")) {
@@ -553,7 +568,6 @@ public class MainController {
             dialogStage.setTitle("Predefined Query");
             dialogStage.initModality(Modality.APPLICATION_MODAL);
 
-            // Owner is current main stage
             Stage primaryStage = (Stage) queryArea.getScene().getWindow();
             dialogStage.initOwner(primaryStage);
 
@@ -562,7 +576,7 @@ public class MainController {
             dialogStage.setScene(dialogScene);
             dialogStage.setWidth(300);
             dialogStage.setHeight(275);
-            dialogStage.setResizable(false); // ✅ Prevent resizing
+            dialogStage.setResizable(false);
             dialogStage.centerOnScreen();
 
             controller.setDialogStage(dialogStage);
@@ -575,31 +589,23 @@ public class MainController {
 
                 if (startDate == null || endDate == null) {
                     showAlert("Missing Dates", "Please select both Start Date and End Date before running the query.");
-                    return; // Stop execution
+                    return;
                 }
-
-                // Check if start date is after end date
                 if (startDate.isAfter(endDate)) {
                     showAlert("Invalid Date Range", "Start Date cannot be after End Date.");
                     return;
                 }
 
-                // Set up connection and displays
                 queryController.setSqliteConnection(this.sqliteConnection);
                 queryController.setQueryDisplay(this.queryArea, this.resultTable, this.exportButton);
 
-                // Show spinner / disable UI
                 statusLabel.setText("Running query...");
-                importProgress.setProgress(0); // indeterminate
+                importProgress.setProgress(0);
 
-                // Run in background thread
                 new Thread(() -> {
                     try {
-                        // Progress simulation
                         this.startSimulatedProgress();
-
                         queryController.runPredefiendQuery(queryType, startDate, endDate, () -> {
-                            // stop simulator and fill bar when done
                             if (progressTask != null)
                                 progressTask.cancel(true);
                             Platform.runLater(() -> {
@@ -609,11 +615,6 @@ public class MainController {
                         });
                     } catch (Exception e) {
                         Platform.runLater(() -> showAlert("Query Error", e.getMessage()));
-                    } finally {
-                        // Platform.runLater(() -> {
-                        // statusLabel.setText("Query complete.");
-                        // importProgress.setProgress(1.0);
-                        // });
                     }
                 }, "predefined-query-thread").start();
             }
@@ -625,16 +626,14 @@ public class MainController {
     }
 
     private void startSimulatedProgress() {
-        // cancel any previous simulator
         if (progressTask != null && !progressTask.isDone()) {
             progressTask.cancel(true);
         }
-
         final double[] prog = { 0.0 };
         progressTask = progressExec.scheduleAtFixedRate(() -> {
             if (prog[0] >= 0.9)
-                return; // cap at 90% until completion callback
-            prog[0] += 0.05; // tick size
+                return; // cap until completion callback
+            prog[0] += 0.05;
             double p = prog[0];
             Platform.runLater(() -> importProgress.setProgress(p));
         }, 0, 300, java.util.concurrent.TimeUnit.MILLISECONDS);
@@ -642,7 +641,7 @@ public class MainController {
 
     public void showAlert(String title, String message) {
         Alert alert = new Alert(Alert.AlertType.ERROR);
-        alert.initOwner(mdbListView.getScene().getWindow()); // 👈 anchor to main window
+        alert.initOwner(mdbListView.getScene().getWindow());
         alert.setTitle(title);
         alert.setContentText(message);
         alert.showAndWait();
@@ -652,6 +651,7 @@ public class MainController {
         currentResults = data;
     }
 
+    /** resolve generated sqlite database paths */
     private void initStorage() {
         appDataDir = getAppDataDir("IDS Analytics");
         try {
@@ -660,8 +660,6 @@ public class MainController {
             throw new RuntimeException("Failed to create app data dir: " + appDataDir, e);
         }
         dbPath = appDataDir.resolve("converted.db");
-
-        // Make sure SQLite temp files go to a writable place too
         System.setProperty("org.sqlite.tmpdir", appDataDir.toString());
     }
 
@@ -676,7 +674,6 @@ public class MainController {
             }
             return Paths.get(System.getProperty("user.home"), "AppData", "Roaming", appName);
         } else {
-            // Linux / Unix
             return Paths.get(System.getProperty("user.home"), ".local", "share", appName);
         }
     }

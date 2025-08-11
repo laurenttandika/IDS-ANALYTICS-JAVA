@@ -267,7 +267,7 @@
         <pkg.iconExt>ico</pkg.iconExt>
       </properties>
     </profile>
-    <!--<profile>
+    <!-- <profile>
       <id>linux</id>
       <activation>
         <os>
@@ -278,7 +278,7 @@
         <pkg.type>deb</pkg.type>- or rpm -
         <pkg.iconExt>png</pkg.iconExt>
       </properties>
-    </profile>-->
+    </profile> -->
   </profiles>
 
 </project>

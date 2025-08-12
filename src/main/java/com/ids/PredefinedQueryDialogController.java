@@ -31,7 +31,14 @@ public class PredefinedQueryDialogController {
                 "TX_NEW",
                 "HTS_TST",
                 "HTS_SELF",
-                "HTS_INDEX_ELICITATION");
+                "HTS_INDEX_ELICITATION",
+                "TX_NEW_INDEX_CONTACTS",
+                "TX_CURR_HVL_OFFERED_ACCEPTED",
+                "TX_CURR_HVL_CONTACTS",
+                "TX_CURR_HVL_OTHER",
+                "TX_CURR_HVL_OTHER_CONTACTS",
+                "TX_RTT_OFFERED_ACCEPTED",
+                "TX_RTT_CONTACTS");
         queryTypeComboBox.getSelectionModel().selectFirst();
     }
 

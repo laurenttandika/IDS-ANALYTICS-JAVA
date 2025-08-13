@@ -48,3 +48,6 @@ Thumbs.db
 
 # Ignore JARs (if built locally)
 *.jar
+
+#ignore dist
+dist/

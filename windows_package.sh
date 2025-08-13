@@ -63,5 +63,5 @@ else
 fi
 
 # Zip bundle
-( cd dist && zip -qr "${APP_NAME}-Windows.zip" "${APP_NAME}" )
-echo "Created dist/${APP_NAME}-Windows.zip"
+#( cd dist && zip -qr "${APP_NAME}-Windows.zip" "${APP_NAME}" )
+#echo "Created dist/${APP_NAME}-Windows.zip"

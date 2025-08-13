@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_NAME="IDS Analytics"
+APP_NAME="IDSAnalytics"
 SHADED_JAR="target/mdb-analytics-1.0.0-shaded.jar"   # your shaded jar
 WIN_JRE_DIR="/Users/laurenttandika/Downloads/Tools/jre_17_windows_x64_86"        # must contain bin/java.exe
 WIN_JAVAFX_DIR="/Users/laurenttandika/Downloads/Tools/jdk_fx_17_windows_x64_86"  # must have lib/*.jar

@@ -1,9 +1,9 @@
 <launch4jConfig>
     <dontWrapJar>false</dontWrapJar>
     <headerType>gui</headerType>   <!-- use "console" for CLI apps -->
-    <outfile>dist/MyApp/MyApp.exe</outfile>
-    <jar>dist/MyApp/app.jar</jar>
-    <errTitle>MyApp</errTitle>
+    <outfile>dist/IDSAnalytics/IDSAnalytics.exe</outfile>
+    <jar>dist/IDSAnalytics/app.jar</jar>
+    <errTitle>IDSAnalytics</errTitle>
 
     <!-- If MANIFEST has Main-Class, you can omit classPath/mainClass -->
 
@@ -21,7 +21,7 @@
         <opt>-Dfile.encoding=UTF-8</opt>
     </jre>
 
-    <icon>dist/MyApp/app.ico</icon>
+    <icon>dist/IDSAnalytics/app.ico</icon>
 
     <versionInfo>
         <fileVersion>1.0.0.0</fileVersion>
@@ -29,10 +29,10 @@
         <productVersion>1.0.0.0</productVersion>
         <txtProductVersion>1.0.0</txtProductVersion>
 
-        <fileDescription>MyApp - MDB Analytics</fileDescription>
-        <productName>MyApp</productName>
-        <originalFilename>MyApp.exe</originalFilename>
-        <internalName>MyApp</internalName>
+        <fileDescription>IDS Analytics</fileDescription>
+        <productName>IDSAnalytics</productName>
+        <originalFilename>IDSAnalytics.exe</originalFilename>
+        <internalName>IDSAnalytics</internalName>
 
         <!-- These two are the ones that trigger prompts if missing: -->
         <companyName>Laurent Software</companyName>
